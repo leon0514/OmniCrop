@@ -4,18 +4,23 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "omnicrop"
-version = "2.0.0"
-description = "High-performance BBox clustering and cropping engine with aspect ratio correction."
+version = "1.0.0"
+description = "High-performance BBox clustering and cropping engine."
 readme = "README.md"
 requires-python = ">=3.7"
-authors = [
-    {name = "Your Name", email = "your.email@example.com"},
-]
-classifiers = [
-    "Programming Language :: C++",
-    "Programming Language :: Python :: 3",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
+license = {text = "MIT"}
+authors = [{name = "Leon", email = "leon@example.com"}]
 
 [tool.scikit-build]
-wheel.expand-macos-universal_tags = true
+# 1. 声明包含 python 代码的目录
+wheel.packages = ["omnicrop"]
+
+# 2. 修正后的安装逻辑：
+# 将 CMake 编译出来的目标（_omnicrop_backend）安装到 python 包 (omnicrop) 内部
+# 注意这里使用了新的映射语法
+cmake.targets = ["_omnicrop_backend"]
+sdist.include = ["omnicrop/*", "src/*"]
+
+[tool.cibuildwheel]
+build = "cp37-* cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*"
+test-command = "python -c \"import omnicrop; print('Import check successful')\""
