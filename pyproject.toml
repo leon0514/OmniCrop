@@ -1,6 +1,7 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "pybind11>=2.13.0"]
-build-backend = "setuptools.build_meta"
+# 切换到 scikit-build-core，它能完美处理 CMake 项目
+requires = ["scikit-build-core>=0.9.0", "pybind11>=2.13.0"]
+build-backend = "scikit-build_core.build_meta"
 
 [project]
 name = "omnicrop"
@@ -9,21 +10,16 @@ description = "High-performance iterative cropping engine based on C++ and DIoU.
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [{name = "leon"}]
+authors = [{name = "Your Name"}]
 
-[tool.setuptools]
-# 包含 omnicrop 这个 Python 包文件夹
-packages = ["omnicrop"]
-include-package-data = true
-
-[[tool.setuptools.ext-modules]]
-name = "omnicrop._omnicrop_backend"
-# 修正路径：指向 src 文件夹下的文件
-sources = ["src/bindings.cpp"]
-include-dirs = ["src"]
-language = "c++"
+[tool.scikit-build]
+# 指定 CMake 找到编译好的 .so 应该放在哪个 Python 包里
+wheel.expand = true
+wheel.install-dir = "omnicrop"
+# 确保在编译时搜索 pybind11
+cmake.args = ["-Dpybind11_DIR:PATH=${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/site-packages/pybind11/share/cmake/pybind11"]
 
 [tool.cibuildwheel]
-environment = { CXXFLAGS="-std=c++11" }
-before-build = "pip install 'pybind11>=2.13.0'"
+# 自动在构建环境安装依赖
+before-build = "pip install \"pybind11>=2.13.0\""
 build-verbosity = "1"

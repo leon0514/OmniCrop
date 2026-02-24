@@ -4,32 +4,19 @@ project(OmniCrop)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 自动处理 pybind11 依赖
-if(NOT pybind11_FOUND)
-    execute_process(
-        COMMAND python3 -c "import pybind11; print(pybind11.get_cmake_dir())"
-        OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-    if(PYBIND11_CMAKE_DIR)
-        list(APPEND CMAKE_PREFIX_PATH "${PYBIND11_CMAKE_DIR}")
-    endif()
-    find_package(pybind11 REQUIRED)
-endif()
+# scikit-build-core 会自动把 pybind11 路径加入 CMAKE_PREFIX_PATH
+find_package(pybind11 REQUIRED)
 
-# 注意：这里直接生成目标，不要手动加路径前缀
+# 创建模块
 pybind11_add_module(_omnicrop_backend src/bindings.cpp)
 target_include_directories(_omnicrop_backend PRIVATE src)
 
-# --- development-friendly output ------------------------------------------------
-# when building locally (e.g. during `pip install -e .`), we want the shared
-# object to live inside the Python package slice so that `import omnicrop`
-# always finds it.  Set the library output directory accordingly.
+# 设置输出名称，确保导入时名字一致
 set_target_properties(_omnicrop_backend PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/omnicrop"
+    PREFIX ""
+    OUTPUT_NAME "_omnicrop_backend"
 )
 
-# [修正] Scikit-build-core 默认会将 install 的 target 放在 wheel 的根目录或指定目录
-# 这里我们直接安装到包内部，这与上面的输出目录一致
-install(TARGETS _omnicrop_backend DESTINATION omnicrop)
+# 安装到 Python 包目录下
+# scikit-build-core 期待 target 被安装到当前目录或子目录
+install(TARGETS _omnicrop_backend DESTINATION .)
