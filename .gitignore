@@ -1,4 +1,4 @@
 build/
 tests/*/*.png
-omnicrop/
-omnicrop/*
+omnicrop/__pycache__
+omnicrop/*.so
