@@ -16,7 +16,6 @@ authors = [{name = "Your Name"}]
 wheel.packages = ["omnicrop"]
 
 [tool.cibuildwheel]
-before-build = "pip install pybind11"
 build-verbosity = "1"
 
 [tool.cibuildwheel.linux]
