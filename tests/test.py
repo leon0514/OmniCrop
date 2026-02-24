@@ -103,7 +103,7 @@ def get_test_cases(img_w, img_h):
 
 def run_tests():
     # 1. 引擎初始化
-    engine = omnicrop.OmniCropEngine(max_crop_size=300, padding=40)
+    engine = omnicrop.OmniCropEngine(max_crop_size=800, padding=40)
     
     # 2. 配置优化参数
     cfg = omnicrop.Config()

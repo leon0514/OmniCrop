@@ -60,6 +60,13 @@
 
 ---
 
+## 效果展示
+![alt text](assert/01_Perspective_Mix.png)
+![alt text](assert/02_Sparse_Corners.png)
+![alt text](assert/03_Dense_Crowd.png)
+![alt text](assert/04_Edge_Boundary.png)
+![alt text](assert/05_Random_Stress.png)
+
 ## 📦 安装与构建
 
 ### 1. 从源码编译
