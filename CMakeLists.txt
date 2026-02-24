@@ -19,4 +19,4 @@ set_target_properties(_omnicrop_backend PROPERTIES
 
 # 安装到 Python 包目录下
 # scikit-build-core 期待 target 被安装到当前目录或子目录
-install(TARGETS _omnicrop_backend DESTINATION .)
+install(TARGETS _omnicrop_backend DESTINATION omnicrop)
