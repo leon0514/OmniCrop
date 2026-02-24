@@ -9,14 +9,12 @@ description = "High-performance iterative cropping engine based on C++ and DIoU.
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [{name = "Your Name"}]
+authors = [{name = "Leon"}]
 
 [tool.setuptools]
-# 显式指定包含的 C++ 文件，防止打包时遗漏
 include-package-data = true
 
 [[tool.setuptools.ext-modules]]
-# 注意这里使用了双括号 [[...]]，表示这是数组中的一个元素
 name = "_omnicrop_backend"
 sources = ["bindings.cpp"]
 include-dirs = ["."]
