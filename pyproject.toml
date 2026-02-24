@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "omnicrop"
-version = "1.0.0"
+version = "1.0.1"
 description = "High-performance iterative cropping engine based on C++ and DIoU."
 readme = "README.md"
 requires-python = ">=3.8"
