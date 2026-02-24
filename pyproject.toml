@@ -14,7 +14,6 @@ authors = [{name = "Leon"}]
 [tool.scikit-build]
 # 声明 Python 源码包所在的目录
 wheel.packages = ["omnicrop"]
-wheel.install-dir = "omnicrop"
 
 [tool.cibuildwheel]
 build-verbosity = "1"
