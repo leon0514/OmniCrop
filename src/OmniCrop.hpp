@@ -8,188 +8,254 @@
 #include <limits>
 #include <queue>
 
-/**
- * @brief 基础边界框结构体
- */
-struct BBox {
-    float x1, y1, x2, y2;
-    BBox() : x1(0), y1(0), x2(0), y2(0) {}
-    BBox(float _x1, float _y1, float _x2, float _y2) : x1(_x1), y1(_y1), x2(_x2), y2(_y2) {}
-    
-    inline float width() const { return x2 - x1; }
-    inline float height() const { return y2 - y1; }
-    inline float area() const { return (x2 - x1) * (y2 - y1); }
-    inline float centerX() const { return (x1 + x2) * 0.5f; }
-    inline float centerY() const { return (y1 + y2) * 0.5f; }
-};
+namespace omnicrop
+{
 
-/**
- * @brief 聚类配置项 (移出类外以修复编译错误)
- */
-struct OmniCropConfig {
-    float w_size = 2.0f;
-    float w_density = 3.0f;
-    float w_scale = 4.0f;
-    float w_square = 1.5f;
-    float w_alignment = 0.5f;
+    struct BBox
+    {
+        float x1, y1, x2, y2;
+        BBox() : x1(0), y1(0), x2(0), y2(0) {}
+        BBox(float _x1, float _y1, float _x2, float _y2) : x1(_x1), y1(_y1), x2(_x2), y2(_y2) {}
 
-    float min_obj_size = 20.0f;
-    float max_obj_size = 1000.0f;
+        inline float width() const { return std::max(0.0f, x2 - x1); }
+        inline float height() const { return std::max(0.0f, y2 - y1); }
+        inline float area() const { return width() * height(); }
+        inline float center_x() const { return (x1 + x2) * 0.5f; }
+        inline float center_y() const { return (y1 + y2) * 0.5f; }
 
-    bool enable_aspect_ratio_fix = true;
-    float target_aspect_ratio = 1.0f;
-};
-
-/**
- * @brief 聚类簇结构体 (添加显式构造函数)
- */
-struct Cluster {
-    int id;
-    BBox bbox;
-    float area_sum;
-    bool active;
-
-    Cluster(int _id, BBox _bbox, float _area_sum) 
-        : id(_id), bbox(_bbox), area_sum(_area_sum), active(true) {}
-};
-
-struct MergeCandidate {
-    float loss;
-    int u, v;
-    bool operator>(const MergeCandidate& other) const { return loss > other.loss; }
-};
-
-/**
- * @brief OmniCropEngine: 修复了默认初始化器编译问题的版本
- */
-class OmniCropEngine {
-public:
-    // 为了保持接口兼容，定义别名
-    using Config = OmniCropConfig;
-
-    OmniCropEngine(int max_crop_size = 1280, int padding = 50, int max_outputs = 5, float stop_threshold = 3.5f)
-        : max_crop_size_(max_crop_size), padding_(padding), max_outputs_(max_outputs), stop_threshold_(stop_threshold) {}
-
-    std::vector<BBox> cluster_and_crop(const std::vector<BBox>& person_boxes, int img_w, int img_h, Config cfg = Config()) {
-        if (person_boxes.empty()) return {};
-
-        std::vector<Cluster> clusters;
-        std::vector<BBox> direct_outputs;
-
-        // 1. 预处理
-        for (const auto& box : person_boxes) {
-            float w = box.width(), h = box.height();
-            if (w < cfg.min_obj_size || h < cfg.min_obj_size) continue;
-            if (w > cfg.max_obj_size || h > cfg.max_obj_size) {
-                direct_outputs.push_back(finalize_box(box, img_w, img_h, cfg));
-                continue;
-            }
-            // 使用构造函数而非大括号聚合初始化
-            clusters.push_back(Cluster((int)clusters.size(), box, box.area()));
+        static BBox merge(const BBox &a, const BBox &b)
+        {
+            return BBox(std::min(a.x1, b.x1), std::min(a.y1, b.y1),
+                        std::max(a.x2, b.x2), std::max(a.y2, b.y2));
         }
 
-        int cn = (int)clusters.size();
-        if (cn == 0) return direct_outputs;
-
-        // 2. 堆初始化
-        std::priority_queue<MergeCandidate, std::vector<MergeCandidate>, std::greater<MergeCandidate>> pq;
-        for (int i = 0; i < cn; ++i) {
-            for (int j = i + 1; j < cn; ++j) {
-                float loss = calculate_loss(clusters[i], clusters[j], cfg);
-                if (loss < std::numeric_limits<float>::infinity()) pq.push({loss, i, j});
-            }
+        inline float iou(const BBox &other) const
+        {
+            float xx1 = std::max(x1, other.x1);
+            float yy1 = std::max(y1, other.y1);
+            float xx2 = std::min(x2, other.x2);
+            float yy2 = std::min(y2, other.y2);
+            float inter_area = std::max(0.0f, xx2 - xx1) * std::max(0.0f, yy2 - yy1);
+            float union_area = area() + other.area() - inter_area;
+            return (union_area <= 0) ? 0.0f : inter_area / union_area;
         }
+    };
 
-        // 3. 聚类
-        int active_count = cn;
-        while (active_count > 1 && !pq.empty()) {
-            MergeCandidate top = pq.top(); pq.pop();
-            if (!clusters[top.u].active || !clusters[top.v].active) continue;
-            if (active_count <= max_outputs_ && top.loss > stop_threshold_) break;
+    struct Config
+    {
+        float w_diou = 10.0f;
+        float w_expansion = 5.0f;
+        // 迭代优化的惩罚项：每多一个 Crop 增加的“成本”感。
+        // 增加此值会更倾向于合并，减小此值会更倾向于保留独立的小框。
+        float crop_count_penalty = 50.0f;
 
-            clusters[top.u].bbox = merge_bbox(clusters[top.u].bbox, clusters[top.v].bbox);
-            clusters[top.u].area_sum += clusters[top.v].area_sum;
-            clusters[top.v].active = false;
-            active_count--;
+        float nms_threshold = 0.3f;
+        bool enable_aspect_ratio_fix = true;
+        float target_aspect_ratio = 1.0f;
+    };
 
-            for (int k = 0; k < cn; ++k) {
-                if (k != top.u && clusters[k].active) {
-                    float new_loss = calculate_loss(clusters[top.u], clusters[k], cfg);
-                    if (new_loss < std::numeric_limits<float>::infinity()) 
-                        pq.push({new_loss, std::min(top.u, k), std::max(top.u, k)});
+    struct Cluster
+    {
+        BBox bbox;
+        float person_area_sum;
+        bool active;
+        int generation;
+
+        Cluster(BBox _bbox, float _sum)
+            : bbox(_bbox), person_area_sum(_sum), active(true), generation(0) {}
+    };
+
+    struct MergeCandidate
+    {
+        float loss;
+        int u, v;
+        int gen_u, gen_v;
+        bool operator>(const MergeCandidate &other) const { return loss > other.loss; }
+    };
+
+    class OmniCropEngine
+    {
+    public:
+        OmniCropEngine(int max_crop_size = 1280, int padding = 30)
+            : max_crop_size_(max_crop_size), padding_(padding) {}
+
+        std::vector<BBox> cluster_and_crop(const std::vector<BBox> &boxes, int img_w, int img_h, Config cfg = Config())
+        {
+            if (boxes.empty())
+                return {};
+
+            std::vector<Cluster> clusters;
+            float total_person_area = 0;
+            for (const auto &box : boxes)
+            {
+                clusters.emplace_back(box, box.area());
+                total_person_area += box.area();
+            }
+
+            // 用于保存每一个迭代步骤的状态
+            struct State
+            {
+                std::vector<BBox> crops;
+                float score;
+            };
+            std::vector<State> history;
+
+            // 初始状态：每个目标一个框
+            auto record_state = [&]()
+            {
+                std::vector<BBox> current_crops;
+                float total_crop_area = 0;
+                for (const auto &c : clusters)
+                {
+                    if (c.active)
+                    {
+                        BBox final_b = safe_finalize(c.bbox, img_w, img_h, cfg);
+                        current_crops.push_back(final_b);
+                        total_crop_area += final_b.area();
+                    }
+                }
+                // 核心评价指标：利用率越大越好，框的数量越少越好
+                // Score = (总目标面积 / 总裁剪面积) - (框数量 * 惩罚)
+                float utilization = total_person_area / (total_crop_area + 1e-6f);
+                float score = utilization * 100.0f - (current_crops.size() * cfg.crop_count_penalty / boxes.size());
+                history.push_back({current_crops, score});
+            };
+
+            record_state();
+
+            // 优先级队列驱动的贪婪合并
+            std::priority_queue<MergeCandidate, std::vector<MergeCandidate>, std::greater<MergeCandidate>> pq;
+            auto add_to_pq = [&](int i, int j)
+            {
+                float loss = calculate_affinity_loss(clusters[i], clusters[j], cfg);
+                if (loss < std::numeric_limits<float>::infinity())
+                {
+                    pq.push({loss, i, j, clusters[i].generation, clusters[j].generation});
+                }
+            };
+
+            for (size_t i = 0; i < clusters.size(); ++i)
+            {
+                for (size_t j = i + 1; j < clusters.size(); ++j)
+                    add_to_pq((int)i, (int)j);
+            }
+
+            while (!pq.empty())
+            {
+                MergeCandidate top = pq.top();
+                pq.pop();
+
+                if (!clusters[top.u].active || !clusters[top.v].active)
+                    continue;
+                if (clusters[top.u].generation != top.gen_u || clusters[top.v].generation != top.gen_v)
+                    continue;
+
+                // 执行合并
+                clusters[top.u].bbox = BBox::merge(clusters[top.u].bbox, clusters[top.v].bbox);
+                clusters[top.u].person_area_sum += clusters[top.v].person_area_sum;
+                clusters[top.u].generation++;
+                clusters[top.v].active = false;
+
+                // 记录合并后的新状态
+                record_state();
+
+                for (size_t k = 0; k < clusters.size(); ++k)
+                {
+                    if (clusters[k].active && (int)k != top.u)
+                        add_to_pq(top.u, (int)k);
                 }
             }
+
+            // 从历史中选择得分最高的状态
+            auto best_it = std::max_element(history.begin(), history.end(), [](const State &a, const State &b)
+                                            { return a.score < b.score; });
+
+            // 最后的 Crop 级别融合（处理可能存在的重叠）
+            return resolve_overlaps(best_it->crops, img_w, img_h, cfg);
         }
 
-        // 4. 汇总
-        std::vector<BBox> final_results = direct_outputs;
-        for (const auto& c : clusters) {
-            if (c.active) final_results.push_back(finalize_box(c.bbox, img_w, img_h, cfg));
-        }
-        return final_results;
-    }
+    private:
+        int max_crop_size_;
+        int padding_;
 
-private:
-    int max_crop_size_, padding_, max_outputs_;
-    float stop_threshold_;
+        float calculate_affinity_loss(const Cluster &a, const Cluster &b, const Config &cfg) const
+        {
+            BBox union_box = BBox::merge(a.bbox, b.bbox);
+            // 硬约束：合并后不能超过最大裁剪尺寸
+            if (union_box.width() > max_crop_size_ || union_box.height() > max_crop_size_)
+                return std::numeric_limits<float>::infinity();
 
-    inline BBox merge_bbox(const BBox& a, const BBox& b) const {
-        return BBox(std::min(a.x1, b.x1), std::min(a.y1, b.y1), std::max(a.x2, b.x2), std::max(a.y2, b.y2));
-    }
+            float center_dist_sq = std::pow(a.bbox.center_x() - b.bbox.center_x(), 2) +
+                                   std::pow(a.bbox.center_y() - b.bbox.center_y(), 2);
+            float diag_sq = std::pow(union_box.width(), 2) + std::pow(union_box.height(), 2) + 1e-6f;
 
-    BBox finalize_box(BBox b, int img_w, int img_h, const Config& cfg) const {
-        float w = b.width() + 2 * padding_;
-        float h = b.height() + 2 * padding_;
-        float cx = b.centerX();
-        float cy = b.centerY();
+            // Expansion 越小，说明合并后浪费的空间越少
+            float expansion = 1.0f - ((a.person_area_sum + b.person_area_sum) / (union_box.area() + 1e-6f));
 
-        if (cfg.enable_aspect_ratio_fix) {
-            float current_ar = w / h;
-            if (current_ar < cfg.target_aspect_ratio) w = h * cfg.target_aspect_ratio;
-            else h = w / cfg.target_aspect_ratio;
+            return cfg.w_diou * (center_dist_sq / diag_sq) + cfg.w_expansion * expansion;
         }
 
-        if (w > max_crop_size_) { 
-            w = (float)max_crop_size_; 
-            if(cfg.enable_aspect_ratio_fix) h = w / cfg.target_aspect_ratio; 
+        BBox safe_finalize(const BBox &b, int img_w, int img_h, const Config &cfg) const
+        {
+            float tw = b.width() + 2 * padding_;
+            float th = b.height() + 2 * padding_;
+
+            if (cfg.enable_aspect_ratio_fix)
+            {
+                float current_ar = tw / (th + 1e-6f);
+                if (current_ar < cfg.target_aspect_ratio)
+                    tw = th * cfg.target_aspect_ratio;
+                else
+                    th = tw / cfg.target_aspect_ratio;
+            }
+
+            tw = std::max(std::min({tw, (float)max_crop_size_, (float)img_w}), b.width());
+            th = std::max(std::min({th, (float)max_crop_size_, (float)img_h}), b.height());
+
+            float x1 = std::min(std::max(0.0f, b.center_x() - tw * 0.5f), b.x1);
+            float y1 = std::min(std::max(0.0f, b.center_y() - th * 0.5f), b.y1);
+
+            if (x1 + tw > img_w)
+                x1 = img_w - tw;
+            if (y1 + th > img_h)
+                y1 = img_h - th;
+
+            return BBox(x1, y1, x1 + tw, y1 + th);
         }
-        if (h > max_crop_size_) { 
-            h = (float)max_crop_size_; 
-            if(cfg.enable_aspect_ratio_fix) w = h * cfg.target_aspect_ratio; 
+
+        std::vector<BBox> resolve_overlaps(const std::vector<BBox> &crops, int img_w, int img_h, const Config &cfg)
+        {
+            if (crops.empty())
+                return {};
+            std::vector<BBox> result = crops;
+            bool merged = true;
+            while (merged)
+            {
+                merged = false;
+                for (size_t i = 0; i < result.size(); ++i)
+                {
+                    for (size_t j = i + 1; j < result.size(); ++j)
+                    {
+                        if (result[i].iou(result[j]) > cfg.nms_threshold)
+                        {
+                            BBox new_union = BBox::merge(result[i], result[j]);
+                            if (new_union.width() <= max_crop_size_ && new_union.height() <= max_crop_size_)
+                            {
+                                result[i] = safe_finalize(new_union, img_w, img_h, cfg);
+                                result.erase(result.begin() + j);
+                                merged = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (merged)
+                        break;
+                }
+            }
+            return result;
         }
+    };
 
-        float x1 = std::max(0.0f, cx - w * 0.5f);
-        float y1 = std::max(0.0f, cy - h * 0.5f);
-        float x2 = std::min((float)img_w, x1 + w);
-        float y2 = std::min((float)img_h, y1 + h);
-        
-        if (x2 == (float)img_w) x1 = std::max(0.0f, x2 - w);
-        if (y2 == (float)img_h) y1 = std::max(0.0f, y2 - h);
-
-        return BBox(x1, y1, x2, y2);
-    }
-
-    float calculate_loss(const Cluster& a, const Cluster& b, const Config& cfg) const {
-        float x1 = std::min(a.bbox.x1, b.bbox.x1), y1 = std::min(a.bbox.y1, b.bbox.y1);
-        float x2 = std::max(a.bbox.x2, b.bbox.x2), y2 = std::max(a.bbox.y2, b.bbox.y2);
-        float rw = x2 - x1, rh = y2 - y1;
-
-        if (rw + 2 * padding_ > max_crop_size_ || rh + 2 * padding_ > max_crop_size_) 
-            return std::numeric_limits<float>::infinity();
-
-        float max_dim = std::max(rw + 2 * padding_, rh + 2 * padding_);
-        float l_size = std::exp(max_dim / (float)max_crop_size_) - 1.0f;
-        float l_density = 1.0f - ((a.area_sum + b.area_sum) / (rw * rh + 1e-6f));
-        float l_scale = std::abs(a.bbox.height() - b.bbox.height()) / (std::max(a.bbox.height(), b.bbox.height()) + 1e-6f);
-        float l_square = 1.0f - ((rw * rh) / (max_dim * max_dim + 1e-6f));
-        
-        float dx = std::abs(a.bbox.centerX() - b.bbox.centerX());
-        float dy = std::abs(a.bbox.centerY() - b.bbox.centerY());
-        float l_align = std::min(dx, dy) / (std::max(dx, dy) + 1e-6f);
-
-        return cfg.w_size * l_size + cfg.w_density * l_density + cfg.w_scale * l_scale + 
-               cfg.w_square * l_square + cfg.w_alignment * l_align;
-    }
-};
+}
 
 #endif

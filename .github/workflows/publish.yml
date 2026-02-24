@@ -1,0 +1,95 @@
+name: Build and Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送以 v 开头的标签时触发，如 v0.1.0
+
+jobs:
+  # ----------------------------------------------------------------
+  # 1. 编译各平台的 Wheel 二进制包
+  # ----------------------------------------------------------------
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # 覆盖主流操作系统
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.21.3
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          # 构建目标：支持 Python 3.8 到 3.13
+          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*"
+          
+          # 跳过不必要的架构（如 Windows 32位和 PyPy）以缩短构建时间
+          CIBW_SKIP: "*-win32 *_i686 pp*"
+          
+          # 编译前安装 pybind11，确保版本 >= 2.13.0 以兼容 Python 3.13
+          CIBW_BEFORE_BUILD: "pip install 'pybind11>=2.13.0'"
+          
+          # Linux 编译环境：使用 manylinux2014 标准以确保在各种旧版 Linux 上运行
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
+          
+          # 允许在编译时运行简单的测试（可选）
+          # CIBW_TEST_COMMAND: "python -c 'import _omnicrop_backend; print(\"Import success\")'"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
+
+  # ----------------------------------------------------------------
+  # 2. 生成源码分发包 (sdist)
+  # ----------------------------------------------------------------
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  # ----------------------------------------------------------------
+  # 3. 发布到 PyPI
+  # ----------------------------------------------------------------
+  upload_pypi:
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    # 推荐在 PyPI 项目设置中使用 "Trusted Publishers" 映射此环境
+    environment: pypi
+    permissions:
+      id-token: write # 用于受信任的发布者 (Trusted Publishers) 身份验证
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

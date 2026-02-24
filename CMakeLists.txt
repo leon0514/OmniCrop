@@ -22,10 +22,14 @@ endif()
 pybind11_add_module(_omnicrop_backend src/bindings.cpp)
 target_include_directories(_omnicrop_backend PRIVATE src)
 
-# [修正] Scikit-build-core 默认会将 install 的 target 放在 wheel 的根目录或指定目录
-# 这里我们直接安装到“当前”目录，由 toml 里的配置来决定它属于哪个包
-install(TARGETS _omnicrop_backend DESTINATION .)
+# --- development-friendly output ------------------------------------------------
+# when building locally (e.g. during `pip install -e .`), we want the shared
+# object to live inside the Python package slice so that `import omnicrop`
+# always finds it.  Set the library output directory accordingly.
+set_target_properties(_omnicrop_backend PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/omnicrop"
+)
 
-# 同时生成 C++ 原生测试程序 (可选)
-add_executable(OmniCropTest tests/test_omnicrop.cpp)
-target_include_directories(OmniCropTest PRIVATE src)
+# [修正] Scikit-build-core 默认会将 install 的 target 放在 wheel 的根目录或指定目录
+# 这里我们直接安装到包内部，这与上面的输出目录一致
+install(TARGETS _omnicrop_backend DESTINATION omnicrop)

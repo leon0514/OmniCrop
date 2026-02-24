@@ -1,15 +1,19 @@
 [build-system]
-requires = ["scikit-build-core", "pybind11"]
-build-backend = "scikit_build_core.build"
+requires = [
+    "setuptools>=61.0",
+    "wheel",
+    "pybind11>=2.13.0"
+]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnicrop"
 version = "1.0.0"
 description = "High-performance BBox clustering and cropping engine."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [{name = "Leon", email = "leon@example.com"}]
+authors = [{name = "Leon", email = "1778064763@qq.com"}]
 
 [tool.scikit-build]
 # 1. 声明包含 python 代码的目录
