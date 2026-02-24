@@ -44,6 +44,7 @@ jobs:
           # Linux 编译环境：使用 manylinux2014 标准以确保在各种旧版 Linux 上运行
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
+          CIBW_BUILD_VERBOSITY: "1"
           
           # 允许在编译时运行简单的测试（可选）
           # CIBW_TEST_COMMAND: "python -c 'import _omnicrop_backend; print(\"Import success\")'"

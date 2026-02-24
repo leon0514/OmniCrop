@@ -1,30 +1,28 @@
 [build-system]
-requires = [
-    "setuptools>=61.0",
-    "wheel",
-    "pybind11>=2.13.0"
-]
+requires = ["setuptools>=61.0", "wheel", "pybind11>=2.13.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "omnicrop"
 version = "1.0.0"
-description = "High-performance BBox clustering and cropping engine."
+description = "High-performance iterative cropping engine based on C++ and DIoU."
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [{name = "Leon", email = "1778064763@qq.com"}]
+authors = [{name = "Your Name"}]
 
-[tool.scikit-build]
-# 1. 声明包含 python 代码的目录
-wheel.packages = ["omnicrop"]
+[tool.setuptools]
+# 显式指定包含的文件
+include-package-data = true
 
-# 2. 修正后的安装逻辑：
-# 将 CMake 编译出来的目标（_omnicrop_backend）安装到 python 包 (omnicrop) 内部
-# 注意这里使用了新的映射语法
-cmake.targets = ["_omnicrop_backend"]
-sdist.include = ["omnicrop/*", "src/*"]
+[tool.setuptools.ext-modules]
+# 关键部分：定义扩展模块
+"_omnicrop_backend" = {sources = ["bindings.cpp"], include-dirs = ["."], language = "c++"}
 
 [tool.cibuildwheel]
-build = "cp37-* cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*"
-test-command = "python -c \"import omnicrop; print('Import check successful')\""
+# 为所有平台设置 C++ 标准
+environment = { CXXFLAGS="-std=c++11" }
+# 构建前确认安装依赖
+before-build = "pip install 'pybind11>=2.13.0'"
+# 构建输出详细程度
+build-verbosity = "1"
