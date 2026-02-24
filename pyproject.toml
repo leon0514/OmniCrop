@@ -1,5 +1,4 @@
 [build-system]
-# 切换到 scikit-build-core，它能完美处理 CMake 项目
 requires = ["scikit-build-core>=0.9.0", "pybind11>=2.13.0"]
 build-backend = "scikit_build_core.build"
 
@@ -13,13 +12,14 @@ license = {text = "MIT"}
 authors = [{name = "Your Name"}]
 
 [tool.scikit-build]
-# 指定 CMake 找到编译好的 .so 应该放在哪个 Python 包里
-wheel.expand = true
-wheel.install-dir = "omnicrop"
-# 确保在编译时搜索 pybind11
-cmake.args = ["-Dpybind11_DIR:PATH=${PYTHON_PREFIX}/lib/python${PYTHON_VERSION}/site-packages/pybind11/share/cmake/pybind11"]
+# 明确告诉构建工具，我们的 Python 包名叫 omnicrop
+wheel.packages = ["omnicrop"]
 
 [tool.cibuildwheel]
-# 自动在构建环境安装依赖
+# 构建前在容器环境中安装依赖
 before-build = "pip install \"pybind11>=2.13.0\""
 build-verbosity = "1"
+
+[tool.cibuildwheel.linux]
+# 修复 Linux 下的 wheel 标签 (manylinux)
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
