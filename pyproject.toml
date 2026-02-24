@@ -12,14 +12,12 @@ license = {text = "MIT"}
 authors = [{name = "Your Name"}]
 
 [tool.scikit-build]
-# 明确告诉构建工具，我们的 Python 包名叫 omnicrop
+# 声明 Python 源码包所在的目录
 wheel.packages = ["omnicrop"]
 
 [tool.cibuildwheel]
-# 构建前在容器环境中安装依赖
-before-build = "pip install \"pybind11>=2.13.0\""
+before-build = "pip install pybind11"
 build-verbosity = "1"
 
 [tool.cibuildwheel.linux]
-# 修复 Linux 下的 wheel 标签 (manylinux)
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
