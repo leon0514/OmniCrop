@@ -9,15 +9,18 @@ description = "High-performance iterative cropping engine based on C++ and DIoU.
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-authors = [{name = "Leon"}]
+authors = [{name = "leon"}]
 
 [tool.setuptools]
+# 包含 omnicrop 这个 Python 包文件夹
+packages = ["omnicrop"]
 include-package-data = true
 
 [[tool.setuptools.ext-modules]]
-name = "_omnicrop_backend"
-sources = ["bindings.cpp"]
-include-dirs = ["."]
+name = "omnicrop._omnicrop_backend"
+# 修正路径：指向 src 文件夹下的文件
+sources = ["src/bindings.cpp"]
+include-dirs = ["src"]
 language = "c++"
 
 [tool.cibuildwheel]
