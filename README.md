@@ -65,8 +65,8 @@
 ### 1. 从源码编译
 需要系统中安装了 C++ 编译器和 `pybind11`。
 ```bash
-git clone [https://github.com/your-repo/omnicrop.git](https://github.com/your-repo/omnicrop.git)
-cd omnicrop
+git clone [https://github.com/leon0514/OmniCrop.git](https://github.com/leon0514/OmniCrop.git)
+cd OmniCrop
 pip install .
 ```
 
